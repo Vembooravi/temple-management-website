@@ -12,7 +12,7 @@
   --radius: 16px;
   --radius-sm: 12px;
   --space: 1.4rem;
-  --hero-img: url("assets/temple.jpg");
+  --hero-img: url("assets/temple-hero.jpg");
 }
 
 .theme-dark {
@@ -284,5 +284,4 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(184,92,56,0.
   .hero { padding: 2.25rem; }
   .card { padding: 1.5rem; }
 }
-
 
