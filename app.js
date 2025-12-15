@@ -6,7 +6,8 @@
     events: "ttnt_events",
     uzh: "ttnt_uzhavarapani",
     session: "ttnt_sessions",
-    history: "ttnt_history"
+    history: "ttnt_history",
+    pref: "ttnt_pref"
   };
 
   const els = {};
@@ -70,6 +71,23 @@
     els.nextUzhDate = qs("nextUzhDate");
     els.uzhForm = qs("uzhavarapaniForm");
     els.historyText = qs("historyText");
+    els.countdownTimer = qs("countdownTimer");
+    els.countdownLabel = qs("countdownLabel");
+    els.bannerSchedule = qs("bannerSchedule");
+    els.metaSchedule = qs("metaSchedule");
+    els.langToggle = qs("langToggle");
+    els.themeToggle = qs("themeToggle");
+    els.docTitle = qs("docTitle");
+    els.brandTitle = qs("brandTitle");
+    els.heroTitle = qs("heroTitle");
+    els.overviewTitle = qs("overviewTitle");
+
+    els.eventSearch = qs("eventSearch");
+    els.userSearch = qs("userSearch");
+    els.uzhSearch = qs("uzhSearch");
+    els.exportEventsBtn = qs("exportEventsBtn");
+    els.exportUsersBtn = qs("exportUsersBtn");
+    els.exportUzhBtn = qs("exportUzhBtn");
   }
 
   function seed() {
@@ -77,7 +95,7 @@
       write(STORE.admins, [{ username: "admin", password: "admin123" }]);
     }
     if (!read(STORE.events).length) {
-      const next = nextLastSunday();
+      const next = fourthSunday(new Date());
       const sample = [
         {
           id: Date.now(),
@@ -104,16 +122,19 @@
     els.historyText.textContent = read(STORE.history, "");
   }
 
-  function nextLastSunday() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const end = new Date(year, month + 1, 0); // last day of month
-    const day = end.getDay(); // 0 Sunday
-    const diff = day === 0 ? 0 : day;
-    const lastSunday = new Date(end);
-    lastSunday.setDate(end.getDate() - diff);
-    return lastSunday;
+  function fourthSunday(base = new Date()) {
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    let count = 0;
+    const d = new Date(year, month, 1);
+    while (d.getMonth() === month) {
+      if (d.getDay() === 0) count++;
+      if (count === 4) return new Date(d);
+      d.setDate(d.getDate() + 1);
+    }
+    // fallback to last Sunday
+    d.setDate(d.getDate() - 7);
+    return d;
   }
 
   function formatDate(str) {
@@ -218,10 +239,11 @@
   function renderEvents() {
     if (!els.eventsTable) return;
     const list = read(STORE.events);
+    const filtered = filterBySearch(list, els.eventSearch?.value);
     els.eventsTable.innerHTML =
       list.length === 0
         ? "<p class='muted'>நிகழ்வுகள் இல்லை</p>"
-        : list
+        : filtered
             .map(
               (ev) => `
           <div class="table-item">
@@ -241,7 +263,7 @@
       btn.addEventListener("click", () => deleteEvent(Number(btn.dataset.delete)));
     });
     if (els.eventCountPill) {
-      els.eventCountPill.textContent = `${list.length} நிகழ்வுகள்`;
+      els.eventCountPill.textContent = `${filtered.length} நிகழ்வுகள்`;
     }
   }
 
@@ -290,10 +312,11 @@
   function renderUsers() {
     if (!els.usersTable) return;
     const users = read(STORE.users);
+    const filtered = filterBySearch(users, els.userSearch?.value);
     els.usersTable.innerHTML =
       users.length === 0
         ? "<p class='muted'>பயனர்கள் பதிவு செய்யவில்லை</p>"
-        : users
+        : filtered
             .map(
               (u) => `
           <div class="table-item">
@@ -328,11 +351,12 @@
 
   function renderUserEvents() {
     const list = read(STORE.events);
+    const filtered = filterBySearch(list, els.eventSearch?.value);
     if (!els.userEvents) return;
     els.userEvents.innerHTML =
-      list.length === 0
+      filtered.length === 0
         ? "<p class='muted'>நிகழ்வுகள் இல்லை</p>"
-        : list
+        : filtered
             .map(
               (ev) => `
           <div class="table-item">
@@ -400,11 +424,12 @@
 
   function renderUzh() {
     const list = read(STORE.uzh);
+    const filtered = filterBySearch(list, els.uzhSearch?.value);
     if (els.uzhTable) {
       els.uzhTable.innerHTML =
-        list.length === 0
+        filtered.length === 0
           ? "<p class='muted'>இன்னும் பதிவு இல்லை</p>"
-          : list
+          : filtered
               .map(
                 (r) => `
           <div class="table-item">
@@ -430,13 +455,30 @@
     els.refreshUsersBtn?.addEventListener("click", renderUsers);
     els.refreshUzhBtn?.addEventListener("click", renderUzh);
     els.userLogoutBtn?.addEventListener("click", logoutUser);
+
+    els.eventSearch?.addEventListener("input", () => {
+      renderEvents();
+      renderUserEvents();
+    });
+    els.userSearch?.addEventListener("input", renderUsers);
+    els.uzhSearch?.addEventListener("input", renderUzh);
+
+    els.exportEventsBtn?.addEventListener("click", () => exportCsv(read(STORE.events), "events.csv"));
+    els.exportUsersBtn?.addEventListener("click", () => exportCsv(read(STORE.users), "users.csv"));
+    els.exportUzhBtn?.addEventListener("click", () => exportCsv(read(STORE.uzh), "uzhavarapani.csv"));
+
+    els.themeToggle?.addEventListener("click", toggleTheme);
+    els.langToggle?.addEventListener("click", toggleLang);
   }
 
   function setNextUzh() {
     if (!els.nextUzhDate) return;
-    const d = nextLastSunday();
+    const d = fourthSunday();
     const txt = `${formatDate(d.toISOString())} (காலை 9:00)`;
     els.nextUzhDate.textContent = txt;
+    if (els.countdownTimer) {
+      startCountdown(d);
+    }
   }
 
   function setTodayCard() {
@@ -450,6 +492,105 @@
     els.todayNotice.textContent = `${top.title} — ${formatDate(top.date)}`;
   }
 
+  function filterBySearch(list, term) {
+    if (!term) return list;
+    const t = term.toLowerCase();
+    return list.filter((item) => JSON.stringify(item).toLowerCase().includes(t));
+  }
+
+  function exportCsv(list, filename) {
+    if (!list || !list.length) {
+      toast("தரவு இல்லை");
+      return;
+    }
+    const keys = Object.keys(list[0]);
+    const rows = [keys.join(",")].concat(
+      list.map((row) => keys.map((k) => `"${(row[k] ?? "").toString().replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function startCountdown(targetDate) {
+    const target = new Date(targetDate).getTime();
+    if (Number.isNaN(target) || !els.countdownTimer) return;
+    const tick = () => {
+      const now = Date.now();
+      const diff = target - now;
+      if (diff <= 0) {
+        els.countdownTimer.textContent = "நடப்பில்";
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      els.countdownTimer.textContent = `${days} நாள் ${hours} மணி`;
+      requestAnimationFrame(() => setTimeout(tick, 1000));
+    };
+    tick();
+  }
+
+  const L10N = {
+    ta: {
+      schedule: "மாதம் நான்காம் ஞாயிறு — உழவரப்பணி",
+      today: "இன்றைய அறிவிப்பு",
+      countdown: "அடுத்த உழவரப்பணி வரை",
+      nav: {
+        overview: "மேலோட்டம்",
+        history: "வரலாறு",
+        events: "நிகழ்வுகள்",
+        gallery: "படங்கள்",
+        uzh: "உழவரப்பணி",
+        contact: "தொடர்பு"
+      }
+    },
+    en: {
+      schedule: "Fourth Sunday every month — Uzhavarapani",
+      today: "Today’s Update",
+      countdown: "Next Uzhavarapani in",
+      nav: {
+        overview: "Overview",
+        history: "History",
+        events: "Events",
+        gallery: "Photos",
+        uzh: "Uzhavarapani",
+        contact: "Contact"
+      }
+    }
+  };
+
+  function toggleTheme() {
+    const pref = read(STORE.pref, {});
+    const isDark = document.documentElement.classList.toggle("theme-dark");
+    write(STORE.pref, { ...pref, theme: isDark ? "dark" : "light" });
+  }
+
+  function toggleLang() {
+    const pref = read(STORE.pref, {});
+    const next = pref.lang === "en" ? "ta" : "en";
+    applyLang(next);
+    write(STORE.pref, { ...pref, lang: next });
+  }
+
+  function applyLang(lang) {
+    const dict = L10N[lang] || L10N.ta;
+    if (els.bannerSchedule) els.bannerSchedule.textContent = dict.schedule;
+    if (els.metaSchedule) els.metaSchedule.textContent = `📅 ${dict.schedule}`;
+    if (els.todayHeading) els.todayHeading.textContent = dict.today;
+    if (els.countdownLabel) els.countdownLabel.textContent = dict.countdown;
+    if (qs("navOverview")) qs("navOverview").textContent = dict.nav.overview;
+    if (qs("navHistory")) qs("navHistory").textContent = dict.nav.history;
+    if (qs("navEvents")) qs("navEvents").textContent = dict.nav.events;
+    if (qs("navGallery")) qs("navGallery").textContent = dict.nav.gallery;
+    if (qs("navUzh")) qs("navUzh").textContent = dict.nav.uzh;
+    if (qs("navContact")) qs("navContact").textContent = dict.nav.contact;
+    document.documentElement.lang = lang === "en" ? "en" : "ta";
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initDom();
     seed();
@@ -458,6 +599,9 @@
     setTodayCard();
     bindTabs();
     bindMisc();
+    const pref = read(STORE.pref, {});
+    if (pref.theme === "dark") document.documentElement.classList.add("theme-dark");
+    applyLang(pref.lang || "ta");
 
     els.adminLoginForm?.addEventListener("submit", handleAdminLogin);
     els.adminAddForm?.addEventListener("submit", addAdmin);
@@ -475,4 +619,5 @@
     renderUserState();
   });
 })();
+
 
